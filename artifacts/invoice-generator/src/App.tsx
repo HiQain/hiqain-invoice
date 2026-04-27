@@ -1,0 +1,41 @@
+import { Switch, Route, Router as WouterRouter } from "wouter";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import NotFound from "@/pages/not-found";
+
+import AppLayout from "@/components/AppLayout";
+import Dashboard from "@/pages/Dashboard";
+import InvoiceEditor from "@/pages/InvoiceEditor";
+import Settings from "@/pages/Settings";
+
+const queryClient = new QueryClient();
+
+function Router() {
+  return (
+    <AppLayout>
+      <Switch>
+        <Route path="/" component={Dashboard} />
+        <Route path="/invoice/new" component={InvoiceEditor} />
+        <Route path="/invoice/:id" component={InvoiceEditor} />
+        <Route path="/settings" component={Settings} />
+        <Route component={NotFound} />
+      </Switch>
+    </AppLayout>
+  );
+}
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+          <Router />
+        </WouterRouter>
+        <Toaster position="top-right" richColors />
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+}
+
+export default App;

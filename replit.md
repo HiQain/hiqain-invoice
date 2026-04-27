@@ -16,6 +16,10 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
 
+## Artifacts
+
+- **invoice-generator** (`/`) — Professional invoice generator. Frontend-only React + Vite + Tailwind app. Persists invoices and business profile to localStorage. Exports PDFs via jspdf + html2canvas. Pages: `/` (dashboard), `/invoice/new`, `/invoice/:id`, `/settings`.
+
 ## Key Commands
 
 - `pnpm run typecheck` — full typecheck across all packages
