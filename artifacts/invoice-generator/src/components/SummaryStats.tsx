@@ -1,29 +1,19 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Invoice } from "@/lib/storage";
-
-function formatCurrency(amount: number, currency: string) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: currency || "USD",
-  }).format(amount);
-}
-
-function calculateTotal(invoice: Invoice) {
-  const subtotal = invoice.lineItems.reduce((sum, item) => sum + item.quantity * item.rate, 0);
-  const discount = subtotal * (invoice.discountRate / 100);
-  const taxable = subtotal - discount;
-  const tax = taxable * (invoice.taxRate / 100);
-  return taxable + tax;
-}
+import { calculateTotal, formatCurrency } from "@/lib/calculations";
 
 export function SummaryStats({ invoices }: { invoices: Invoice[] }) {
   const totalOutstanding = invoices
-    .filter((i) => i.status === "sent")
+    .filter((i) => i.documentType === "invoice" && i.status === "sent")
     .reduce((sum, i) => sum + calculateTotal(i), 0);
 
   const totalPaid = invoices
-    .filter((i) => i.status === "paid")
+    .filter((i) => i.documentType === "invoice" && i.status === "paid")
     .reduce((sum, i) => sum + calculateTotal(i), 0);
+
+  const acceptedEstimates = invoices
+    .filter((i) => i.documentType === "estimate" && i.status === "accepted")
+    .length;
 
   const now = new Date();
   const currentMonth = now.getMonth();
@@ -56,11 +46,13 @@ export function SummaryStats({ invoices }: { invoices: Invoice[] }) {
       </Card>
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Invoices This Month</CardTitle>
+          <CardTitle className="text-sm font-medium">Accepted Estimates</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{countThisMonth}</div>
-          <p className="text-xs text-muted-foreground mt-1">Created in current month</p>
+          <div className="text-2xl font-bold">{acceptedEstimates}</div>
+          <p className="text-xs text-muted-foreground mt-1">
+            {countThisMonth} total documents created this month
+          </p>
         </CardContent>
       </Card>
     </div>

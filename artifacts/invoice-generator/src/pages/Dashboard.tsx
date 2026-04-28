@@ -1,18 +1,32 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { Copy, Eye, MoreHorizontal, Plus, Trash2 } from "lucide-react";
+import {
+  CheckCircle2,
+  Copy,
+  Eye,
+  FilePlus2,
+  MoreHorizontal,
+  RefreshCcw,
+  Trash2,
+} from "lucide-react";
 import { nanoid } from "nanoid";
 
-import { listInvoices, deleteInvoice, saveInvoice, Invoice } from "@/lib/storage";
+import {
+  deleteInvoice,
+  Invoice,
+  listInvoices,
+  nextInvoiceNumber,
+  saveInvoice,
+} from "@/lib/storage";
 import { Button } from "@/components/ui/button";
-import { 
+import {
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
-  TableRow 
+  TableRow,
 } from "@/components/ui/table";
 import {
   DropdownMenu,
@@ -36,21 +50,7 @@ import { toast } from "sonner";
 import { StatusPill } from "@/components/StatusPill";
 import { EmptyState } from "@/components/EmptyState";
 import { SummaryStats } from "@/components/SummaryStats";
-
-function formatCurrency(amount: number, currency: string) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: currency || "USD",
-  }).format(amount);
-}
-
-function calculateTotal(invoice: Invoice) {
-  const subtotal = invoice.lineItems.reduce((sum, item) => sum + item.quantity * item.rate, 0);
-  const discount = subtotal * (invoice.discountRate / 100);
-  const taxable = subtotal - discount;
-  const tax = taxable * (invoice.taxRate / 100);
-  return taxable + tax;
-}
+import { calculateTotal, formatCurrency } from "@/lib/calculations";
 
 export default function Dashboard() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -60,41 +60,65 @@ export default function Dashboard() {
     setInvoices(listInvoices());
   }, []);
 
+  const refresh = () => setInvoices(listInvoices());
+
   const handleDelete = () => {
-    if (deleteId) {
-      deleteInvoice(deleteId);
-      setInvoices(listInvoices());
-      setDeleteId(null);
-      toast.success("Invoice deleted");
-    }
+    if (!deleteId) return;
+    deleteInvoice(deleteId);
+    refresh();
+    setDeleteId(null);
+    toast.success("Document deleted");
   };
 
   const handleDuplicate = (invoice: Invoice) => {
+    const prefix = invoice.documentType === "estimate" ? "EST" : "INV";
     const newInvoice: Invoice = {
       ...invoice,
       id: nanoid(),
-      invoiceNumber: invoice.invoiceNumber + "-COPY", // simple suffix, can be changed later
+      invoiceNumber: `${prefix}-COPY-${invoice.invoiceNumber}`,
       status: "draft",
       issueDate: format(new Date(), "yyyy-MM-dd"),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
     saveInvoice(newInvoice);
-    setInvoices(listInvoices());
-    toast.success("Invoice duplicated");
+    refresh();
+    toast.success(`${invoice.documentType === "estimate" ? "Estimate" : "Invoice"} duplicated`);
   };
+
+  const handleConvertToInvoice = (invoice: Invoice) => {
+    const updated: Invoice = {
+      ...invoice,
+      documentType: "invoice",
+      invoiceNumber: nextInvoiceNumber(),
+      status: "draft",
+      updatedAt: new Date().toISOString(),
+    };
+    saveInvoice(updated);
+    refresh();
+    toast.success("Estimate converted to invoice");
+  };
+
+  const sortedInvoices = [...invoices].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground mt-1">Manage your invoices and track payments.</p>
+      <div className="flex flex-col gap-5 rounded-[28px] border border-stone-200 bg-[linear-gradient(135deg,_rgba(15,118,110,0.08),_rgba(255,255,255,0.95)_40%)] p-6 sm:flex-row sm:items-end sm:justify-between">
+        <div className="max-w-2xl">
+          <div className="inline-flex rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-teal-700">
+            Smart Job Estimator
+          </div>
+          <h1 className="mt-3 text-3xl font-bold tracking-tight">Estimate first. Invoice in one click.</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Build branded quotes for plumbing, electrical, cleaning, HVAC, flooring, solar, and general trades.
+          </p>
         </div>
-        <Button asChild>
-          <Link href="/invoice/new">
-            <Plus className="mr-2 h-4 w-4" />
-            New Invoice
+        <Button asChild size="lg">
+          <Link href="/estimate/new">
+            <FilePlus2 className="mr-2 h-4 w-4" />
+            Create Estimate
           </Link>
         </Button>
       </div>
@@ -102,7 +126,15 @@ export default function Dashboard() {
       <SummaryStats invoices={invoices} />
 
       <div>
-        <h2 className="text-xl font-semibold mb-4">Recent Invoices</h2>
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold">Recent Estimates & Invoices</h2>
+            <p className="text-sm text-muted-foreground">
+              Manage quotes, conversion, and branded PDF exports in one place.
+            </p>
+          </div>
+        </div>
+
         {invoices.length === 0 ? (
           <EmptyState />
         ) : (
@@ -110,26 +142,28 @@ export default function Dashboard() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Invoice</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Document</TableHead>
+                  <TableHead>Trade</TableHead>
                   <TableHead>Client</TableHead>
                   <TableHead>Issued</TableHead>
-                  <TableHead>Due</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead className="text-right">Final Quote</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="w-[50px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {invoices.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((invoice) => (
+                {sortedInvoices.map((invoice) => (
                   <TableRow key={invoice.id}>
+                    <TableCell className="font-medium capitalize">{invoice.documentType}</TableCell>
                     <TableCell className="font-medium">
-                      <Link href={`/invoice/${invoice.id}`} className="hover:underline">
+                      <Link href={`/document/${invoice.id}`} className="hover:underline">
                         {invoice.invoiceNumber}
                       </Link>
                     </TableCell>
-                    <TableCell>{invoice.client.name || "—"}</TableCell>
+                    <TableCell>{invoice.trade}</TableCell>
+                    <TableCell>{invoice.client.name || "-"}</TableCell>
                     <TableCell>{format(new Date(invoice.issueDate), "MMM d, yyyy")}</TableCell>
-                    <TableCell>{format(new Date(invoice.dueDate), "MMM d, yyyy")}</TableCell>
                     <TableCell className="text-right font-medium">
                       {formatCurrency(calculateTotal(invoice), invoice.currency)}
                     </TableCell>
@@ -148,16 +182,38 @@ export default function Dashboard() {
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem asChild>
-                            <Link href={`/invoice/${invoice.id}`}>
+                            <Link href={`/document/${invoice.id}`}>
                               <Eye className="mr-2 h-4 w-4" />
                               View & Edit
                             </Link>
                           </DropdownMenuItem>
+                          {invoice.documentType === "estimate" && (
+                            <DropdownMenuItem onClick={() => handleConvertToInvoice(invoice)}>
+                              <RefreshCcw className="mr-2 h-4 w-4" />
+                              Convert to Invoice
+                            </DropdownMenuItem>
+                          )}
+                          {invoice.status === "sent" && invoice.documentType === "estimate" && (
+                            <DropdownMenuItem
+                              onClick={() => {
+                                saveInvoice({
+                                  ...invoice,
+                                  status: "accepted",
+                                  updatedAt: new Date().toISOString(),
+                                });
+                                refresh();
+                                toast.success("Estimate marked as accepted");
+                              }}
+                            >
+                              <CheckCircle2 className="mr-2 h-4 w-4" />
+                              Mark Accepted
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem onClick={() => handleDuplicate(invoice)}>
                             <Copy className="mr-2 h-4 w-4" />
                             Duplicate
                           </DropdownMenuItem>
-                          <DropdownMenuItem 
+                          <DropdownMenuItem
                             className="text-destructive focus:bg-destructive focus:text-destructive-foreground"
                             onClick={() => setDeleteId(invoice.id)}
                           >
@@ -180,12 +236,15 @@ export default function Dashboard() {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the invoice.
+              This action cannot be undone. This will permanently delete the estimate or invoice.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

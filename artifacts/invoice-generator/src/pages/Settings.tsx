@@ -44,7 +44,7 @@ export default function Settings() {
         <Card>
           <CardHeader>
             <CardTitle>Business Profile</CardTitle>
-            <CardDescription>This information will appear on your invoices.</CardDescription>
+            <CardDescription>This information will appear on your estimates and invoices.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -89,6 +89,22 @@ export default function Settings() {
             </div>
 
             <div className="space-y-2">
+              <Label>Brand Color</Label>
+              <div className="flex items-center gap-3">
+                <Input
+                  type="color"
+                  value={profile.brandColor}
+                  onChange={(e) => setProfile({ ...profile, brandColor: e.target.value })}
+                  className="h-11 w-20 p-1"
+                />
+                <Input
+                  value={profile.brandColor}
+                  onChange={(e) => setProfile({ ...profile, brandColor: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
               <Label>Email</Label>
               <Input 
                 type="email"
@@ -118,8 +134,8 @@ export default function Settings() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Invoice Defaults</CardTitle>
-            <CardDescription>Pre-fill values for new invoices.</CardDescription>
+            <CardTitle>Estimator Defaults</CardTitle>
+            <CardDescription>Pre-fill values for new estimates and converted invoices.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -140,6 +156,17 @@ export default function Settings() {
                   onChange={(e) => setProfile({ ...profile, defaultTaxRate: Number(e.target.value) })} 
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Default Hourly Rate</Label>
+              <Input 
+                type="number"
+                min="0"
+                step="1"
+                value={profile.defaultHourlyRate} 
+                onChange={(e) => setProfile({ ...profile, defaultHourlyRate: Number(e.target.value) })} 
+              />
             </div>
 
             <div className="space-y-2">

@@ -16,8 +16,11 @@ function Router() {
     <AppLayout>
       <Switch>
         <Route path="/" component={Dashboard} />
+        <Route path="/estimate/new" component={InvoiceEditor} />
+        <Route path="/estimate/:id" component={InvoiceEditor} />
         <Route path="/invoice/new" component={InvoiceEditor} />
         <Route path="/invoice/:id" component={InvoiceEditor} />
+        <Route path="/document/:id" component={InvoiceEditor} />
         <Route path="/settings" component={Settings} />
         <Route component={NotFound} />
       </Switch>

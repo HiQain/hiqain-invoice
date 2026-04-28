@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Receipt, Plus, LayoutDashboard, Settings } from "lucide-react";
+import { Calculator, FilePlus2, LayoutDashboard, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -11,9 +11,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="container flex h-14 items-center max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="mr-4 flex">
             <Link href="/" className="flex items-center space-x-2">
-              <Receipt className="h-5 w-5 text-primary" />
+              <Calculator className="h-5 w-5 text-primary" />
               <span className="font-bold tracking-tight text-lg hidden sm:inline-block">
-                Invoicer
+                Smart Job Estimator
               </span>
             </Link>
           </div>
@@ -43,9 +43,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </Link>
             </nav>
             <Button asChild size="sm" className="ml-auto">
-              <Link href="/invoice/new">
-                <Plus className="mr-2 h-4 w-4" />
-                New Invoice
+              <Link href="/estimate/new">
+                <FilePlus2 className="mr-2 h-4 w-4" />
+                New Estimate
               </Link>
             </Button>
           </div>
