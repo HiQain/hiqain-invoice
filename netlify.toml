@@ -1,6 +1,6 @@
 [build]
   command = "pnpm --filter @workspace/invoice-generator build"
-  publish = "artifacts/web/dist/public"
+  publish = "artifacts/invoice-generator/dist/public"
 
 [[redirects]]
   from = "/*"
