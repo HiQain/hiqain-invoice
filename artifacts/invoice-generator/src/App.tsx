@@ -8,6 +8,11 @@ import AppLayout from "@/components/AppLayout";
 import Dashboard from "@/pages/Dashboard";
 import InvoiceEditor from "@/pages/InvoiceEditor";
 import Settings from "@/pages/Settings";
+import { Blog } from "./pages/blog";
+import ContactPage from "./pages/contact";
+import DisclaimerPage from "./pages/disclaimer";
+import { PrivacyPolicy } from "./pages/privacy-policy";
+import { TermsOfService } from "./pages/terms-of-service";
 
 const queryClient = new QueryClient();
 
@@ -16,6 +21,11 @@ function Router() {
     <AppLayout>
       <Switch>
         <Route path="/" component={Dashboard} />
+        <Route path="/blog" component={Blog} />
+        <Route path="/contact" component={ContactPage} />
+        <Route path="/disclaimer" component={DisclaimerPage} />
+        <Route path="/privacy-policy" component={PrivacyPolicy} />
+        <Route path="/terms-of-service" component={TermsOfService} />
         <Route path="/estimate/new" component={InvoiceEditor} />
         <Route path="/estimate/:id" component={InvoiceEditor} />
         <Route path="/invoice/new" component={InvoiceEditor} />

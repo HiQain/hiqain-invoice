@@ -1,6 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { Calculator, FilePlus2, LayoutDashboard, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SiteFooter } from "@/components/SiteFooter";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
@@ -54,6 +55,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <main className="flex-1 print:p-0">
         {children}
       </main>
+      <SiteFooter />
     </div>
   );
 }
