@@ -130,7 +130,7 @@ export default function Dashboard() {
           <div>
             <h2 className="text-xl font-semibold">Recent Estimates & Invoices</h2>
             <p className="text-sm text-muted-foreground">
-              Manage quotes, conversion, and branded PDF exports in one place.
+              Manage quotes, conversion, and branded PDF exports in one place.a
             </p>
           </div>
         </div>
