@@ -123,36 +123,74 @@ export function InvoicePreview({ invoice }: { invoice: Invoice }) {
           >
             <h3 className="text-sm font-semibold text-slate-950">Estimator Snapshot</h3>
             <div className="mt-4 space-y-3 text-sm text-slate-600">
-              <div className="flex justify-between">
-                <span>Labor Hours</span>
-                <span className="font-medium text-slate-900">{invoice.estimator.laborHours}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Hourly Rate</span>
-                <span className="font-medium text-slate-900">
-                  {formatCurrency(invoice.estimator.hourlyRate, invoice.currency)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Materials</span>
-                <span className="font-medium text-slate-900">
-                  {formatCurrency(invoice.estimator.materialCost, invoice.currency)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Overhead</span>
-                <span className="font-medium text-slate-900">
-                  {formatCurrency(invoice.estimator.overhead, invoice.currency)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Profit Margin</span>
-                <span className="font-medium text-slate-900">{invoice.estimator.profitMargin}%</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Tax</span>
-                <span className="font-medium text-slate-900">{invoice.taxRate}%</span>
-              </div>
+              {invoice.estimator.laborType === "hourly" && invoice.estimator.laborHours > 0 && (
+                <div className="flex justify-between">
+                  <span>Labor Hours</span>
+                  <span className="font-medium text-slate-900">{invoice.estimator.laborHours}</span>
+                </div>
+              )}
+              {invoice.estimator.hourlyRate > 0 && (
+                <div className="flex justify-between">
+                  <span>Hourly Rate</span>
+                  <span className="font-medium text-slate-900">
+                    {formatCurrency(invoice.estimator.hourlyRate, invoice.currency)}
+                  </span>
+                </div>
+              )}
+              {invoice.estimator.projectRate && invoice.estimator.projectRate > 0 && (
+                <div className="flex justify-between">
+                  <span>Project Rate</span>
+                  <span className="font-medium text-slate-900">
+                    {formatCurrency(invoice.estimator.projectRate, invoice.currency)}
+                  </span>
+                </div>
+              )}
+              
+              {/* Materials Section */}
+              {(invoice.estimator.materials.length > 0 || invoice.estimator.materialCost > 0) && (
+                <div className="space-y-2">
+                  <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">Materials</div>
+                  {invoice.estimator.materials.map((material, index) => (
+                    material.cost > 0 && (
+                      <div key={index} className="flex justify-between pl-2 text-xs">
+                        <span>{material.name || `Material ${index + 1}`}</span>
+                        <span className="font-medium text-slate-900">
+                          {formatCurrency(material.cost, invoice.currency)}
+                        </span>
+                      </div>
+                    )
+                  ))}
+                  {invoice.estimator.materialCost > 0 && (
+                    <div className="flex justify-between pl-2 text-xs">
+                      <span>Additional Materials</span>
+                      <span className="font-medium text-slate-900">
+                        {formatCurrency(invoice.estimator.materialCost, invoice.currency)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {invoice.estimator.overhead > 0 && (
+                <div className="flex justify-between">
+                  <span>Overhead</span>
+                  <span className="font-medium text-slate-900">
+                    {formatCurrency(invoice.estimator.overhead, invoice.currency)}
+                  </span>
+                </div>
+              )}
+              {invoice.estimator.profitMargin > 0 && (
+                <div className="flex justify-between">
+                  <span>Profit Margin</span>
+                  <span className="font-medium text-slate-900">{invoice.estimator.profitMargin}%</span>
+                </div>
+              )}
+              {invoice.taxRate > 0 && (
+                <div className="flex justify-between">
+                  <span>Tax</span>
+                  <span className="font-medium text-slate-900">{invoice.taxRate}%</span>
+                </div>
+              )}
             </div>
           </div>
         </div>

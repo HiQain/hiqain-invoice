@@ -19,9 +19,12 @@ export type TradeType =
   | "General";
 
 export type EstimatorInputs = {
+  laborType: "hourly" | "project";
   laborHours: number;
   hourlyRate: number;
+  projectRate?: number;
   materialCost: number;
+  materials: { name: string; cost: number }[];
   overhead: number;
   profitMargin: number;
 };
@@ -78,9 +81,11 @@ const PROFILE_KEY = "invoice-generator:profile";
 
 function defaultEstimatorInputs(hourlyRate = 85): EstimatorInputs {
   return {
+    laborType: "hourly",
     laborHours: 1,
     hourlyRate,
     materialCost: 0,
+    materials: [],
     overhead: 0,
     profitMargin: 20,
   };

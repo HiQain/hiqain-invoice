@@ -44,6 +44,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { StatusPill } from "@/components/StatusPill";
 import { InvoicePreview } from "@/components/InvoicePreview";
+import CollapsibleSection from "@/components/Collapsible";
 
 const TRADE_OPTIONS: TradeType[] = [
   "Plumbing",
@@ -58,23 +59,39 @@ const TRADE_OPTIONS: TradeType[] = [
 const GENERATED_LINE_ITEM_IDS = ["labor", "materials", "overhead", "profit"];
 
 function buildEstimatorLineItems(estimator: EstimatorInputs): LineItem[] {
-  const laborCost = estimator.laborHours * estimator.hourlyRate;
-  const baseCost = laborCost + estimator.materialCost + estimator.overhead;
+  const laborCost =
+    estimator.laborType === "hourly"
+      ? estimator.laborHours * estimator.hourlyRate
+      : estimator.projectRate || 0;
+  
+  const materialLineItems = estimator.materials.map((material, index) => ({
+    id: `material-${index}`,
+    description: material.name,
+    quantity: 1,
+    rate: material.cost,
+  }));
+  
+  const totalMaterialCost = estimator.materials.reduce((sum, m) => sum + m.cost, 0) + estimator.materialCost;
+  const baseCost = laborCost + totalMaterialCost + estimator.overhead;
   const profitAmount = baseCost * (estimator.profitMargin / 100);
 
   return [
     {
       id: "labor",
-      description: `Labor (${estimator.laborHours} hrs @ ${estimator.hourlyRate}/hr)`,
-      quantity: estimator.laborHours,
-      rate: estimator.hourlyRate,
+      description:
+        estimator.laborType === "hourly"
+          ? `Labor (${estimator.laborHours} hrs @ ${estimator.hourlyRate}/hr)`
+          : `Labor (Project Based)`,
+      quantity: 1,
+      rate: laborCost,
     },
-    {
+    ...materialLineItems,
+    ...(estimator.materialCost > 0 ? [{
       id: "materials",
-      description: "Materials",
+      description: "Additional Materials",
       quantity: 1,
       rate: estimator.materialCost,
-    },
+    }] : []),
     {
       id: "overhead",
       description: "Overhead",
@@ -92,7 +109,7 @@ function buildEstimatorLineItems(estimator: EstimatorInputs): LineItem[] {
 
 function syncEstimatorDocument(invoice: Invoice): Invoice {
   const manualLineItems = invoice.lineItems.filter(
-    (item) => !GENERATED_LINE_ITEM_IDS.includes(item.id),
+    (item) => !GENERATED_LINE_ITEM_IDS.includes(item.id) && !item.id.startsWith("material-"),
   );
 
   return {
@@ -129,9 +146,11 @@ function createDocumentDraft(documentType: DocumentType): Invoice {
       email: "",
     },
     estimator: {
+      laborType: "hourly",
       laborHours: 1,
       hourlyRate: profile.defaultHourlyRate,
       materialCost: 0,
+      materials: [],
       overhead: 0,
       profitMargin: 20,
     },
@@ -281,9 +300,9 @@ export default function InvoiceEditor() {
     });
   };
 
-  const updateEstimatorField = (
-    field: keyof EstimatorInputs,
-    value: number,
+  const updateEstimatorField = <K extends keyof EstimatorInputs>(
+    field: K,
+    value: EstimatorInputs[K],
   ) => {
     setInvoice((prev) => {
       if (!prev) return prev;
@@ -291,7 +310,48 @@ export default function InvoiceEditor() {
         ...prev,
         estimator: {
           ...prev.estimator,
-          [field]: Number.isFinite(value) ? value : 0,
+          [field]: value,
+        },
+      });
+    });
+  };
+
+  const addMaterial = () => {
+    setInvoice((prev) => {
+      if (!prev) return prev;
+      return syncEstimatorDocument({
+        ...prev,
+        estimator: {
+          ...prev.estimator,
+          materials: [...prev.estimator.materials, { name: "", cost: 0 }],
+        },
+      });
+    });
+  };
+
+  const updateMaterial = (index: number, field: "name" | "cost", value: string | number) => {
+    setInvoice((prev) => {
+      if (!prev) return prev;
+      const newMaterials = [...prev.estimator.materials];
+      newMaterials[index] = { ...newMaterials[index], [field]: value };
+      return syncEstimatorDocument({
+        ...prev,
+        estimator: {
+          ...prev.estimator,
+          materials: newMaterials,
+        },
+      });
+    });
+  };
+
+  const removeMaterial = (index: number) => {
+    setInvoice((prev) => {
+      if (!prev) return prev;
+      return syncEstimatorDocument({
+        ...prev,
+        estimator: {
+          ...prev.estimator,
+          materials: prev.estimator.materials.filter((_, i) => i !== index),
         },
       });
     });
@@ -363,298 +423,380 @@ export default function InvoiceEditor() {
         </div>
 
         <div className="space-y-8">
-          <section className="rounded-2xl border border-stone-200 bg-stone-50 p-5">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <h2 className="text-base font-semibold">Job Setup</h2>
-                <p className="text-sm text-muted-foreground">
-                  Pick the trade, set dates, and lock in your document type.
-                </p>
+          <CollapsibleSection title="Job Setup">
+            <section className="rounded-2xl border border-stone-200 bg-stone-50 p-5">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">
+                    Pick the trade, set dates, and lock in your document type.
+                  </p>
+                </div>
+                <BriefcaseBusiness className="h-5 w-5 text-teal-700" />
               </div>
-              <BriefcaseBusiness className="h-5 w-5 text-teal-700" />
-            </div>
 
-            <div className="mt-5 grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>{documentLabel} Number</Label>
-                <Input
-                  value={invoice.invoiceNumber}
-                  onChange={(e) => updateField("invoiceNumber", e.target.value)}
-                />
+              <div className="mt-5 grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>{documentLabel} Number</Label>
+                  <Input
+                    value={invoice.invoiceNumber}
+                    onChange={(e) => updateField("invoiceNumber", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Trade</Label>
+                  <select
+                    value={invoice.trade}
+                    onChange={(e) => updateField("trade", e.target.value as TradeType)}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    {TRADE_OPTIONS.map((trade) => (
+                      <option key={trade} value={trade}>
+                        {trade}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Issue Date</Label>
+                  <Input
+                    type="date"
+                    value={invoice.issueDate}
+                    onChange={(e) => updateField("issueDate", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>{isEstimate ? "Valid Until" : "Due Date"}</Label>
+                  <Input
+                    type="date"
+                    value={invoice.dueDate}
+                    onChange={(e) => updateField("dueDate", e.target.value)}
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Trade</Label>
-                <select
-                  value={invoice.trade}
-                  onChange={(e) => updateField("trade", e.target.value as TradeType)}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            </section>
+          </CollapsibleSection>
+
+          <CollapsibleSection title="Estimator Inputs">
+            <section className="rounded-2xl border border-stone-200 bg-background p-5">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">
+                    Labor, materials, overhead, margin, and tax roll into the final quote automatically.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-2 my-4">
+                <Button
+                  variant={invoice.estimator.laborType === "hourly" ? "default" : "outline"}
+                  onClick={() => updateEstimatorField("laborType", "hourly")}
                 >
-                  {TRADE_OPTIONS.map((trade) => (
-                    <option key={trade} value={trade}>
-                      {trade}
-                    </option>
+                  Hourly
+                </Button>
+
+                <Button
+                  variant={invoice.estimator.laborType === "project" ? "default" : "outline"}
+                  onClick={() => updateEstimatorField("laborType", "project")}
+                >
+                  Project Based
+                </Button>
+              </div>
+
+              <div className="mt-5 grid grid-cols-2 gap-4">
+                {/* 👇 LABOR INPUTS (conditional) */}
+                {invoice.estimator.laborType === "hourly" ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Labor Hours</Label>
+                      <Input
+                        type="number"
+                        value={invoice.estimator.laborHours}
+                        onChange={(e) =>
+                          updateEstimatorField("laborHours", Number(e.target.value))
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Hourly Rate</Label>
+                      <Input
+                        type="number"
+                        value={invoice.estimator.hourlyRate}
+                        onChange={(e) =>
+                          updateEstimatorField("hourlyRate", Number(e.target.value))
+                        }
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-2 col-span-2">
+                    <Label>Project Price</Label>
+                    <Input
+                      type="number"
+                      value={invoice.estimator.projectRate || 0}
+                      onChange={(e) =>
+                        updateEstimatorField("projectRate", Number(e.target.value))
+                      }
+                    />
+                  </div>
+                )}
+
+                {/* 👇 MATERIAL COST FIELDS */}
+                <div className="space-y-2 col-span-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Materials</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={addMaterial}
+                      className="h-8 w-8 p-0"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  
+                  {/* Individual Materials */}
+                  {invoice.estimator.materials.map((material, index) => (
+                    <div key={index} className="flex gap-2 items-end">
+                      <div className="flex-1 space-y-1">
+                        <Label className="text-xs text-muted-foreground">Material Name</Label>
+                        <Input
+                          placeholder="e.g. Copper pipe"
+                          value={material.name}
+                          onChange={(e) => updateMaterial(index, "name", e.target.value)}
+                        />
+                      </div>
+                      <div className="w-24 space-y-1">
+                        <Label className="text-xs text-muted-foreground">Cost</Label>
+                        <Input
+                          type="number"
+                          value={material.cost}
+                          onChange={(e) => updateMaterial(index, "cost", Number(e.target.value))}
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => removeMaterial(index)}
+                        className="h-8 w-8 p-0"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   ))}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label>Issue Date</Label>
-                <Input
-                  type="date"
-                  value={invoice.issueDate}
-                  onChange={(e) => updateField("issueDate", e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>{isEstimate ? "Valid Until" : "Due Date"}</Label>
-                <Input
-                  type="date"
-                  value={invoice.dueDate}
-                  onChange={(e) => updateField("dueDate", e.target.value)}
-                />
-              </div>
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-stone-200 bg-background p-5">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <h2 className="text-base font-semibold">Estimator Inputs</h2>
-                <p className="text-sm text-muted-foreground">
-                  Labor, materials, overhead, margin, and tax roll into the final quote automatically.
-                </p>
-              </div>
-              <div className="rounded-xl bg-teal-600 px-4 py-3 text-right text-white">
-                <div className="text-xs uppercase tracking-[0.24em] text-teal-100">
-                  Final Quote
+                  
+                  {/* Additional Material Cost */}
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Additional Material Cost (optional)</Label>
+                    <Input
+                      type="number"
+                      placeholder="Additional materials not listed above"
+                      value={invoice.estimator.materialCost}
+                      onChange={(e) =>
+                        updateEstimatorField("materialCost", Number(e.target.value))
+                      }
+                    />
+                  </div>
                 </div>
-                <div className="text-2xl font-bold">
-                  {formatCurrency(quoteTotal, invoice.currency)}
+
+                <div className="space-y-2">
+                  <Label>Overhead</Label>
+                  <Input
+                    type="number"
+                    value={invoice.estimator.overhead}
+                    onChange={(e) =>
+                      updateEstimatorField("overhead", Number(e.target.value))
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Profit Margin (%)</Label>
+                  <Input
+                    type="number"
+                    value={invoice.estimator.profitMargin}
+                    onChange={(e) =>
+                      updateEstimatorField("profitMargin", Number(e.target.value))
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Tax (%)</Label>
+                  <Input
+                    type="number"
+                    value={invoice.taxRate}
+                    onChange={(e) => updateField("taxRate", Number(e.target.value))}
+                  />
                 </div>
               </div>
-            </div>
 
-            <div className="mt-5 grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Labor Hours</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.5"
-                  value={invoice.estimator.laborHours}
-                  onChange={(e) => updateEstimatorField("laborHours", Number(e.target.value))}
-                />
+              <div className="mt-5 grid gap-3 rounded-2xl bg-stone-50 p-4 text-sm sm:grid-cols-4">
+                <div>
+                  <p className="text-muted-foreground">Labor</p>
+                  <p className="mt-1 font-semibold">{formatCurrency(laborCost, invoice.currency)}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Pre-Tax</p>
+                  <p className="mt-1 font-semibold">{formatCurrency(quoteSubtotal, invoice.currency)}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Tax</p>
+                  <p className="mt-1 font-semibold">{formatCurrency(quoteTax, invoice.currency)}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Final Quote</p>
+                  <p className="mt-1 font-semibold">{formatCurrency(quoteTotal, invoice.currency)}</p>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Hourly Rate</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={invoice.estimator.hourlyRate}
-                  onChange={(e) => updateEstimatorField("hourlyRate", Number(e.target.value))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Material Cost</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={invoice.estimator.materialCost}
-                  onChange={(e) => updateEstimatorField("materialCost", Number(e.target.value))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Overhead</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={invoice.estimator.overhead}
-                  onChange={(e) => updateEstimatorField("overhead", Number(e.target.value))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Profit Margin (%)</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.1"
-                  value={invoice.estimator.profitMargin}
-                  onChange={(e) => updateEstimatorField("profitMargin", Number(e.target.value))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Tax (%)</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.1"
-                  value={invoice.taxRate}
-                  onChange={(e) => updateField("taxRate", Number(e.target.value))}
-                />
-              </div>
-            </div>
+            </section>
+          </CollapsibleSection>
 
-            <div className="mt-5 grid gap-3 rounded-2xl bg-stone-50 p-4 text-sm sm:grid-cols-4">
-              <div>
-                <p className="text-muted-foreground">Labor</p>
-                <p className="mt-1 font-semibold">{formatCurrency(laborCost, invoice.currency)}</p>
+          <CollapsibleSection title="Client Details">
+            <section className="space-y-4">
+              <div className="flex items-center justify-between border-b pb-2">
+                <div>
+                  <p className="text-sm text-muted-foreground">
+                    These appear on the branded PDF and the converted invoice.
+                  </p>
+                </div>
+                <Link href="/settings" className="inline-flex items-center gap-2 text-sm font-medium text-teal-700 hover:underline">
+                  <Palette className="h-4 w-4" />
+                  Branding Settings
+                </Link>
               </div>
-              <div>
-                <p className="text-muted-foreground">Pre-Tax</p>
-                <p className="mt-1 font-semibold">{formatCurrency(quoteSubtotal, invoice.currency)}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Tax</p>
-                <p className="mt-1 font-semibold">{formatCurrency(quoteTax, invoice.currency)}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Final Quote</p>
-                <p className="mt-1 font-semibold">{formatCurrency(quoteTotal, invoice.currency)}</p>
-              </div>
-            </div>
-          </section>
 
-          <section className="space-y-4">
-            <div className="flex items-center justify-between border-b pb-2">
-              <div>
-                <h3 className="font-semibold">Client Details</h3>
-                <p className="text-sm text-muted-foreground">
-                  These appear on the branded PDF and the converted invoice.
-                </p>
+              <div className="grid gap-4">
+                <div className="space-y-2">
+                  <Label>Name / Company</Label>
+                  <Input
+                    value={invoice.client.name}
+                    onChange={(e) => updateNestedField("client", "name", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input
+                    type="email"
+                    value={invoice.client.email}
+                    onChange={(e) => updateNestedField("client", "email", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Address</Label>
+                  <Textarea
+                    value={invoice.client.address}
+                    onChange={(e) => updateNestedField("client", "address", e.target.value)}
+                    rows={3}
+                  />
+                </div>
               </div>
-              <Link href="/settings" className="inline-flex items-center gap-2 text-sm font-medium text-teal-700 hover:underline">
-                <Palette className="h-4 w-4" />
-                Branding Settings
-              </Link>
-            </div>
+            </section>
+          </CollapsibleSection>
 
-            <div className="grid gap-4">
-              <div className="space-y-2">
-                <Label>Name / Company</Label>
-                <Input
-                  value={invoice.client.name}
-                  onChange={(e) => updateNestedField("client", "name", e.target.value)}
-                />
+          <CollapsibleSection title="Quote Breakdown">
+            <section className="space-y-4">
+              <div className="flex items-center justify-between border-b pb-2">
+                <div>
+                  <p className="text-sm text-muted-foreground">
+                    Auto-generated from your estimator. You can add extra custom charges if needed.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <AnimatePresence>
+                  {invoice.lineItems.map((item, index) => {
+                    const isGenerated = GENERATED_LINE_ITEM_IDS.includes(item.id);
+
+                    return (
+                      <motion.div
+                        key={item.id}
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="flex gap-3 items-start"
+                      >
+                        <div className="flex-1 space-y-2">
+                          {index === 0 && <Label>Description</Label>}
+                          <Input
+                            value={item.description}
+                            disabled={isGenerated}
+                            onChange={(e) => updateLineItem(item.id, "description", e.target.value)}
+                          />
+                        </div>
+                        <div className="w-24 space-y-2">
+                          {index === 0 && <Label>Qty</Label>}
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.1"
+                            disabled={isGenerated}
+                            value={item.quantity}
+                            onChange={(e) => updateLineItem(item.id, "quantity", Number(e.target.value))}
+                          />
+                        </div>
+                        <div className="w-32 space-y-2">
+                          {index === 0 && <Label>Rate</Label>}
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            disabled={isGenerated}
+                            value={item.rate}
+                            onChange={(e) => updateLineItem(item.id, "rate", Number(e.target.value))}
+                          />
+                        </div>
+                        <div className="pt-2">
+                          {index === 0 && <div className="h-4" />}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-muted-foreground hover:text-destructive"
+                            onClick={() => removeLineItem(item.id)}
+                            disabled={isGenerated}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </AnimatePresence>
+
+                <Button variant="outline" size="sm" onClick={addManualLineItem} className="w-full">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Custom Line Item
+                </Button>
+              </div>
+            </section>
+          </CollapsibleSection>
+
+          <CollapsibleSection title="Notes & Terms">
+            <section className="space-y-4">
+              <div className="flex items-center justify-between border-b pb-2">
+                <h3 className="font-semibold">Notes & Terms</h3>
               </div>
               <div className="space-y-2">
-                <Label>Email</Label>
-                <Input
-                  type="email"
-                  value={invoice.client.email}
-                  onChange={(e) => updateNestedField("client", "email", e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Address</Label>
+                <Label>Notes</Label>
                 <Textarea
-                  value={invoice.client.address}
-                  onChange={(e) => updateNestedField("client", "address", e.target.value)}
+                  value={invoice.notes}
+                  onChange={(e) => updateField("notes", e.target.value)}
                   rows={3}
                 />
               </div>
-            </div>
-          </section>
-
-          <section className="space-y-4">
-            <div className="flex items-center justify-between border-b pb-2">
-              <div>
-                <h3 className="font-semibold">Quote Breakdown</h3>
-                <p className="text-sm text-muted-foreground">
-                  Auto-generated from your estimator. You can add extra custom charges if needed.
-                </p>
+              <div className="space-y-2">
+                <Label>Terms</Label>
+                <Textarea
+                  value={invoice.terms}
+                  onChange={(e) => updateField("terms", e.target.value)}
+                  rows={3}
+                />
               </div>
-            </div>
-
-            <div className="space-y-4">
-              <AnimatePresence>
-                {invoice.lineItems.map((item, index) => {
-                  const isGenerated = GENERATED_LINE_ITEM_IDS.includes(item.id);
-
-                  return (
-                    <motion.div
-                      key={item.id}
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="flex gap-3 items-start"
-                    >
-                      <div className="flex-1 space-y-2">
-                        {index === 0 && <Label>Description</Label>}
-                        <Input
-                          value={item.description}
-                          disabled={isGenerated}
-                          onChange={(e) => updateLineItem(item.id, "description", e.target.value)}
-                        />
-                      </div>
-                      <div className="w-24 space-y-2">
-                        {index === 0 && <Label>Qty</Label>}
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.1"
-                          disabled={isGenerated}
-                          value={item.quantity}
-                          onChange={(e) => updateLineItem(item.id, "quantity", Number(e.target.value))}
-                        />
-                      </div>
-                      <div className="w-32 space-y-2">
-                        {index === 0 && <Label>Rate</Label>}
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          disabled={isGenerated}
-                          value={item.rate}
-                          onChange={(e) => updateLineItem(item.id, "rate", Number(e.target.value))}
-                        />
-                      </div>
-                      <div className="pt-2">
-                        {index === 0 && <div className="h-4" />}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-muted-foreground hover:text-destructive"
-                          onClick={() => removeLineItem(item.id)}
-                          disabled={isGenerated}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </AnimatePresence>
-
-              <Button variant="outline" size="sm" onClick={addManualLineItem} className="w-full">
-                <Plus className="mr-2 h-4 w-4" />
-                Add Custom Line Item
-              </Button>
-            </div>
-          </section>
-
-          <section className="space-y-4">
-            <div className="flex items-center justify-between border-b pb-2">
-              <h3 className="font-semibold">Notes & Terms</h3>
-            </div>
-            <div className="space-y-2">
-              <Label>Notes</Label>
-              <Textarea
-                value={invoice.notes}
-                onChange={(e) => updateField("notes", e.target.value)}
-                rows={3}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Terms</Label>
-              <Textarea
-                value={invoice.terms}
-                onChange={(e) => updateField("terms", e.target.value)}
-                rows={3}
-              />
-            </div>
-          </section>
+            </section>
+          </CollapsibleSection>
         </div>
       </div>
 
